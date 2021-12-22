@@ -11,12 +11,13 @@ cd ..
 cd OWID
 wget https://covid.ourworldindata.org/data/owid-covid-data.csv -O owid-covid-data.csv
 ./owidExtractor.py
+rm owid-covid-data.csv
 cd ..
 
 #get Polish data
 cd Poland
 wget https://arcgis.com/sharing/rest/content/items/a8c562ead9c54e13a135b02e0d875ffb/data -O arch.zip
-unzip -o arch.zip
+unzip -oqq arch.zip
 rm arch.zip
 ./MSZExtractor.py
 cd ..

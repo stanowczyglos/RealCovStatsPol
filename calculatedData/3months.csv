@@ -1,8 +1,7 @@
 Data;Polska zgony sam COV;Niemcy zgony COV;Holandia zgony COV;Wielka Brytania zgony COV;Źródła
-2021-09-21;5;81;6;203;Dane z Polski:  https://www.gov.pl/web/koronawirus/wykaz-zarazen-koronawirusem-sars-cov-2
-2021-09-22;6;71;4;166;"Dane z Niemiec: https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/Daten/Fallzahlen_Gesamtuebersicht.html;jsessionid=B851E5CE2A58119374E9C4F429676D3C.internet071?nn=13490888"
-2021-09-23;3;115;12;182;Dane z pozostałych krajów: https://covid.ourworldindata.org/data/owid-covid-data.csv
-2021-09-24;2;65;4;180;
+2021-09-22;6;71;4;166;Dane z Polski:  https://www.gov.pl/web/koronawirus/wykaz-zarazen-koronawirusem-sars-cov-2
+2021-09-23;3;115;12;182;"Dane z Niemiec: https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/Daten/Fallzahlen_Gesamtuebersicht.html;jsessionid=B851E5CE2A58119374E9C4F429676D3C.internet071?nn=13490888"
+2021-09-24;2;65;4;180;Dane z pozostałych krajów: https://covid.ourworldindata.org/data/owid-covid-data.csv
 2021-09-25;7;62;3;122;
 2021-09-26;0;28;1;63;
 2021-09-27;0;10;7;40;
@@ -90,4 +89,5 @@ Data;Polska zgony sam COV;Niemcy zgony COV;Holandia zgony COV;Wielka Brytania zg
 2021-12-18;145;414;50;125;
 2021-12-19;17;180;48;45;
 2021-12-20;6;119;36;43;
-2021-12-21;132;462;;;
+2021-12-21;132;462;30;173;
+2021-12-22;247;510;;;

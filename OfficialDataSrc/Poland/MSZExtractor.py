@@ -14,7 +14,6 @@ if __name__ == '__main__':
     files.sort()
     for filename in files:
         if True == filename.endswith('eksport.csv'):
-            print(filename)
             csvRow = filename.split('_')[0][:8]
             with open(filename, newline='', encoding='iso-8859-1') as csvFile:
                 reader = csv.reader(csvFile, delimiter=';')
