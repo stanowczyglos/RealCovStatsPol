@@ -20,4 +20,7 @@ wget https://arcgis.com/sharing/rest/content/items/a8c562ead9c54e13a135b02e0d875
 unzip -oqq arch.zip
 rm arch.zip
 ./MSZExtractor.py
+wget https://basiw.mz.gov.pl/api/download/file?fileName=covid_pbi/zakaz_zgony_BKO/zgony.csv -O zgony.csv
+wget https://basiw.mz.gov.pl/api/download/file?fileName=covid_pbi/zakaz_zgony_BKO/zakazenia.csv -O zakazenia.csv
+./deathAnalyser.py
 cd ..
