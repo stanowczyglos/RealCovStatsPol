@@ -74,7 +74,7 @@ if __name__ == '__main__':
                             print(row)
                         record += int(row[deathNoIdx])
                         break
-    print("Number of deaths" + str(record))
+    print("Number of deaths " + str(record))
 
     deathCat = ['Szczepieni ½', 'Szczepieni ½ (ch. współ.)', 'Booster', 'Booster (ch. współ.)', 'Szczepieni',
                 'Szczepieni (ch. współ.)','Nieszczepieni', 'Nieszczepieni (ch. współ.)']
