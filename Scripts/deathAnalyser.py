@@ -118,7 +118,7 @@ class GenericCsvDeathCreator:
         for elem in countryList:
             df[self.dict[elem.name]] = pd.Series(elem.data)
             
-        with open(filePath3Months, 'w') as csvFile:
+        with open(filePath3Months, 'w', newline='') as csvFile:
             logging.info('Create ' + filePath3Months)
             csvFile.write(df.to_csv(index = False))
     
