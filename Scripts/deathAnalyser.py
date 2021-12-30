@@ -6,7 +6,6 @@ import os
 from datetime import datetime, timedelta
 import pandas as pd
 from zipfile import ZipFile
-from urllib.request import urlretrieve
 import urllib
 import configparser
 import itertools
@@ -14,19 +13,20 @@ import logging
 
 #data sources to be downloaded
 polUrl = 'https://arcgis.com/sharing/rest/content/items/a8c562ead9c54e13a135b02e0d875ffb/data'
+uscURL = 'https://api.dane.gov.pl/media/resources/20211228/Liczba_zgon%C3%B3w_w_Rejestrze_Stanu_Cywilnego_w_latach_2015-2021_-_dane_tygodniowe_og%C3%B3%C5%82em.csv'
 deUrl = 'https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/Daten/Fallzahlen_Gesamtuebersicht.xlsx?__blob=publicationFile'
 owidUrl = 'https://covid.ourworldindata.org/data/owid-covid-data.csv'
 
 filePathPol = os.path.join("..", "OfficialDataSrc", "Poland", "DeathData", "arch.zip")
+filePathPolUsc = os.path.join("..", "OfficialDataSrc", "Poland", "allDeathsWeekly.csv")
 filePathDe = os.path.join("..", "OfficialDataSrc", "Germany_RKI", "Fallzahlen_Gesamtuebersicht.xlsx")
 filePathDeCsv = os.path.join("..", "OfficialDataSrc", "Germany_RKI", "Fallzahlen_Gesamtuebersicht.csv")
 filePathOwid = os.path.join("..", "OfficialDataSrc", "OWID", "owid-covid-data.csv")
 
 filePath3Months = os.path.join("..", "calculatedData", "3months.csv")
 filePathSinceBeginning = os.path.join("..", "calculatedData", "sinceBeginning.csv")
-
-#Logger - empty stub for later usage as global logger
-log = None
+filePathAllDeathWeek = os.path.join("..", "calculatedData", "allDeathComparisonWeekly.csv")
+filePathAllDeathCum = os.path.join("..", "calculatedData", "allDeathComparisonCumulative.csv")
 
 class DataHandler:    
     #this function will be used for downloading and converting all data. For now it's hard to handle RKI xlsx.
@@ -49,6 +49,12 @@ class DataHandler:
             file.write(con.read())
         with ZipFile(filePathPol, 'r') as zipObj:
             zipObj.extractall(os.path.split(filePathPol)[0])
+        
+        logging.info('Downloading data from polish registry office: ' + uscURL)
+        req = urllib.request.Request(uscURL, headers={'User-Agent' : "Magic Browser"}) 
+        con = urllib.request.urlopen(req)
+        with open(filePathPolUsc, 'wb') as file:
+            file.write(con.read())
         
         #download and prepare german data
         logging.info('Downloading german data from: ' + deUrl)
@@ -88,19 +94,20 @@ class GenericCsvDeathCreator:
         dictInput = zip(countries, columns)
         self.dict = dict(dictInput)
         
-    def createCsv(self, startDate):
+    def createCsv(self, startDate, dateList, covDeathDate):
         countryList = []
         owidCountryList = []
         for elem in self.dict.keys():
             if elem == 'Poland':
                 pol = PolishDeathData()
-                logging.info('Parsing polish data')
+                logging.info('Parsing Poland data')
                 pol.parser()
                 pol.createFullCsv()
+                pol.createAllDeathCsv(dateList, covDeathDate)
                 countryList.append(pol.getDeathsFromDate(startDate))
             elif elem == 'Germany':
                 de = GenericDeathData(0, -1, 4, filePathDeCsv, countryFilterList = [elem])
-                logging.info('Parsing german data')
+                logging.info('Parsing Germany data')
                 de.parser(startDate)
                 countryList.extend(de.getDeaths())
             else:
@@ -116,7 +123,7 @@ class GenericCsvDeathCreator:
         df = pd.DataFrame()
         df['Data'] = date_range
         for elem in countryList:
-            df[self.dict[elem.name]] = pd.Series(elem.data)
+            df[self.dict[elem.name]] = pd.Series(elem.data).apply(str)
             
         with open(filePath3Months, 'w', newline='') as csvFile:
             logging.info('Create ' + filePath3Months)
@@ -129,10 +136,12 @@ class GenericCountryDeathData:
 
 class PolishDeathData:
     class DeathElem:
-        def __init__(self, date, deathCov, deathCovMore):
+        def __init__(self, date, deathCov, deathCovMore, deathCovCumulative, deathCovMoreCumulative):
             self.date = datetime.strptime(date, '%Y%m%d') 
-            self.deathCov = deathCov
-            self.deathCovMore = deathCovMore
+            self.cov = deathCov
+            self.covMore = deathCovMore
+            self.covCumulative = deathCovCumulative
+            self.covMoreCumulative = deathCovMoreCumulative
             
     def __init__(self):
         self.deathList = []
@@ -142,6 +151,8 @@ class PolishDeathData:
         covDeathIdx = 0
         files = os.listdir(os.path.split(filePathPol)[0])
         files.sort()
+        covCumulative = 0
+        covMoreCumulative = 0
         for filename in files:
             if True == filename.endswith('eksport.csv'):
                 with open(os.path.join(os.path.split(filePathPol)[0],filename), newline='', encoding='iso-8859-1') as csvFile:
@@ -155,7 +166,10 @@ class PolishDeathData:
                             covDeathIdx = iter
                         iter += 1
                     row = next(reader)
-                    self.deathList.append(self.DeathElem(filename.split('_')[0][:8], row[covDeathIdx], row[allDeathIdx]))
+                    covCumulative += int(row[covDeathIdx])
+                    covMoreCumulative += int(row[allDeathIdx])
+                    self.deathList.append(self.DeathElem(filename.split('_')[0][:8],
+                                          int(row[covDeathIdx]), int(row[allDeathIdx]), covCumulative, covMoreCumulative))
 
     def createFullCsv(self):
         #initial value taken from official Gov data for 23.11.2020
@@ -165,17 +179,47 @@ class PolishDeathData:
         covDeaths = round(allDeaths * covFactor)
         
         outCsv = 'Data,Zgony COV+współistniejące,Zgony sam COV,Zgony COV+współistniejące narastająco,Zgony sam COV narastająco' + os.linesep
-        for elem in self.deathList:
-            allDeaths += int(elem.deathCovMore)
-            covDeaths += int(elem.deathCov)
-            outCsv += str(elem.date).split(' ')[0] + ',' + str(elem.deathCovMore) + ',' + str(elem.deathCov) + ',' + str(allDeaths) + ',' + str(covDeaths) + os.linesep
+        for death in self.deathList:
+            outCsv += str(death.date).split(' ')[0] + ',' + str(death.covMore) + ',' + str(death.cov) + ',' + \
+                      str(death.covMoreCumulative + allDeaths) + ',' + str(death.covCumulative + covDeaths) + os.linesep
         with open(filePathSinceBeginning, newline='', mode='w') as csvFile:
             logging.info('Create: ' + filePathSinceBeginning)
             csvFile.write(outCsv)
     
+    def createAllDeathCsv(self, yearList, covYear):
+        csv = pd.read_csv(filePathPolUsc)
+        csvOut = pd.DataFrame(columns=['Tydzień'])
+        
+        #lists to store weekly cov deaths
+        covMoreList = [0 for i in range(datetime(int(covYear), 12, 31).isocalendar()[1])]
+        covList = [0 for i in range(datetime(int(covYear), 12, 31).isocalendar()[1])]
+        
+        csvOut['Tydzień'] = csv['Nr tygodnia']
+        for year in yearList:
+            csvOut['Wszystkie zgony w ' + year] = csv[year]
+            
+        calcStart = False
+        for elem in self.deathList:
+            if True == calcStart:
+                covMoreList[elem.date.isocalendar()[1]-1] += elem.covMore
+                covList[elem.date.isocalendar()[1]-1] += elem.cov
+            elif int(covYear) == elem.date.year and 1 == elem.date.isocalendar()[1]:
+                calcStart = True
+        
+        csvOut['Zgony sam COV w ' + covYear] = pd.Series(covList)
+        csvOut['Zgony COV + ch. współ. w ' + covYear] = pd.Series(covMoreList)
+        
+        csvOut.dropna(how='any', inplace=True)
+        csvOut = csvOut.astype(int)
+        logging.info('Create: ' + filePathAllDeathWeek)
+        csvOut.to_csv(filePathAllDeathWeek, index=False)
+        csvOut = csvOut.cumsum()
+        csvOut['Tydzień'] = csv['Nr tygodnia']
+        logging.info('Create: ' + filePathAllDeathCum)
+        csvOut.to_csv(filePathAllDeathCum, index=False)
+        
     def getDeathsFromDate(self, date):
-        list = [death.deathCov for death in self.deathList if death.date >= date]
-        return GenericCountryDeathData("Poland", list)
+        return GenericCountryDeathData("Poland", [death.cov for death in self.deathList if death.date >= date])
 
 class GenericDeathData:
     def __init__(self, dateCol, countryCol, deathCol, filePath, dateFormat = '%Y-%m-%d', countryFilterList = []):
@@ -219,7 +263,8 @@ class GenericDeathData:
     def getDeaths(self):
         return self.countryData
 
-
+#class PolishAgeAnalyser:
+    
 if __name__ == '__main__':
     config = configparser.ConfigParser()
     config.read('config.ini')
@@ -232,6 +277,7 @@ if __name__ == '__main__':
     dataCtx = DataHandler()
     if True == dataCtx.downloadData():
         csvCreator = GenericCsvDeathCreator(config['COUNTRIES']['List'].split(','), config['COUNTRIES']['CsvHdr'].split(','))
-        csvCreator.createCsv(datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(int(config['DATA_RANGE']['AllCountries'])))
+        csvCreator.createCsv(datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(int(config['DATA_RANGE']['AllCountries'])),
+                             config['DATA_RANGE']['AllDeathsYears'].split(','), config['DATA_RANGE']['AllDeathsCovYear'])
         dataCtx.cleanupData()
 
