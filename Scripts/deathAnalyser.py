@@ -6,7 +6,7 @@ import os
 from datetime import datetime, timedelta
 import pandas as pd
 from zipfile import ZipFile
-import urllib
+import urllib.request
 import configparser
 import logging
 
@@ -214,7 +214,7 @@ class PolishDeathData:
         for death in self.deathList:
             outCsv += str(death.date).split(' ')[0] + ',' + str(death.covSick) + ',' + str(death.cov) + ',' + \
                       str(death.covMoreCumulative + allDeaths) + ',' + str(death.covCumulative + covDeaths) + os.linesep
-        with open(filePathSinceBeginning, newline='', mode='w') as csvFile:
+        with open(filePathSinceBeginning, newline='', mode='w', encoding='utf-8') as csvFile:
             logging.info('Create: ' + filePathSinceBeginning)
             csvFile.write(outCsv)
     
@@ -384,7 +384,7 @@ class GenericDeathData:
         countryDataItem = []
         currentCountry = ''
         foundItem = False
-        with open(self.filePath, newline='', encoding='iso-8859-1') as csvFile:
+        with open(self.filePath, newline='', encoding='utf-8') as csvFile:
             reader = csv.reader(csvFile, delimiter=',')
             #dummy read to skip header
             next(reader)
