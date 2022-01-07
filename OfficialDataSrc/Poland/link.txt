@@ -1,1 +1,4 @@
 https://www.gov.pl/web/koronawirus/wykaz-zarazen-koronawirusem-sars-cov-2
+https://arcgis.com/sharing/rest/content/items/a8c562ead9c54e13a135b02e0d875ffb/data
+https://basiw.mz.gov.pl/api/download/file?fileName=covid_pbi/zakaz_zgony_BKO/zgony.csv
+https://basiw.mz.gov.pl/api/download/file?fileName=covid_pbi/zakaz_zgony_BKO/zakazenia.csv
