@@ -12,7 +12,7 @@ import logging
 
 #data sources to be downloaded
 polUrl = 'https://arcgis.com/sharing/rest/content/items/a8c562ead9c54e13a135b02e0d875ffb/data'
-uscURL = 'https://api.dane.gov.pl/media/resources/20211228/Liczba_zgon%C3%B3w_w_Rejestrze_Stanu_Cywilnego_w_latach_2015-2021_-_dane_tygodniowe_og%C3%B3%C5%82em.csv'
+uscUrl = 'https://api.dane.gov.pl/resources/35662,liczba-zgonow-zarejestrowanych-w-rejestrze-stanu-cywilnego-w-okresie-od-1-wrzesnia-2015-r-dane-tygodniowe/csv'
 basiwDeathUrl = 'https://basiw.mz.gov.pl/api/download/file?fileName=covid_pbi/zakaz_zgony_BKO/zgony.csv'
 basiwCasesUrl = 'https://basiw.mz.gov.pl/api/download/file?fileName=covid_pbi/zakaz_zgony_BKO/zakazenia.csv'
 
@@ -33,6 +33,28 @@ filePathAllDeathWeek = os.path.join("..", "calculatedData", "allDeathComparisonW
 filePathAllDeathCum = os.path.join("..", "calculatedData", "allDeathComparisonCumulative.csv")
 filePathPolDeathCalc = os.path.join("..", "calculatedData", "polDeathsCalc.csv")
 filePathPolCasesCalc = os.path.join("..", "calculatedData", "polCasesCalc.csv")
+
+def convDate2WeekSum(dateList, dataList):
+    if len(dateList) != len(dataList):
+        print("failure len")
+        return
+    
+    #lists to store weekly cov deaths
+    dateWeek = []
+    data = []
+    
+    prevWeek = 0
+    idx = -1
+    for i in range(len(dateList)):
+        week = datetime.strptime(dateList[i], '%Y-%m-%d').isocalendar()[1]
+        if prevWeek != week:
+            data.append(0)
+            dateWeek.append(week)
+            idx += 1
+            
+        data[idx] += dataList[i]
+        prevWeek = week
+    return dateWeek, data
 
 class DataHandler:    
     #this function will be used for downloading and converting all data. For now it's hard to handle RKI xlsx.
@@ -73,6 +95,7 @@ class DataHandler:
         
         self.downloadData(basiwDeathUrl, filePathPolDeath, False)
         self.downloadData(basiwCasesUrl, filePathPolCases, False)
+        self.downloadData(uscUrl, filePathPolUsc, False)
         
         #download and prepare german data
         if True == self.downloadData(deUrl, filePathDe):
@@ -226,8 +249,8 @@ class PolishDeathData:
         covSickList = []
         covList = []
         for covYear in covYearList:
-            covList.append([0 for i in range(datetime(int(covYear), 12, 31).isocalendar()[1])])
-            covSickList.append([0 for i in range(datetime(int(covYear), 12, 31).isocalendar()[1])])
+            covList.append([0 for i in range(53)])
+            covSickList.append([0 for i in range(53)])
         
         csvOut['Tydzień'] = csv['Nr tygodnia']
         yearList.sort()
