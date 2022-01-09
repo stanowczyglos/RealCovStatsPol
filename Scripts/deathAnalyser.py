@@ -9,12 +9,14 @@ from zipfile import ZipFile
 import urllib.request
 import configparser
 import logging
+import re
 
 #data sources to be downloaded
 polUrl = 'https://arcgis.com/sharing/rest/content/items/a8c562ead9c54e13a135b02e0d875ffb/data'
 uscUrl = 'https://api.dane.gov.pl/resources/35662,liczba-zgonow-zarejestrowanych-w-rejestrze-stanu-cywilnego-w-okresie-od-1-wrzesnia-2015-r-dane-tygodniowe/csv'
 basiwDeathUrl = 'https://basiw.mz.gov.pl/api/download/file?fileName=covid_pbi/zakaz_zgony_BKO/zgony.csv'
 basiwCasesUrl = 'https://basiw.mz.gov.pl/api/download/file?fileName=covid_pbi/zakaz_zgony_BKO/zakazenia.csv'
+polHospitalUrl = 'https://koronawirusunas.pl/u/polska-szpital'
 
 deUrl = 'https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/Daten/Fallzahlen_Gesamtuebersicht.xlsx?__blob=publicationFile'
 owidUrl = 'https://covid.ourworldindata.org/data/owid-covid-data.csv'
@@ -23,6 +25,7 @@ filePathPol = os.path.join("..", "OfficialDataSrc", "Poland", "DeathData", "arch
 filePathPolUsc = os.path.join("..", "OfficialDataSrc", "Poland", "allDeathsWeekly.csv")
 filePathPolDeath = os.path.join("..", "OfficialDataSrc", "Poland", "zgony.csv")
 filePathPolCases = os.path.join("..", "OfficialDataSrc", "Poland", "zakazenia.csv")
+filePathPolHospital = os.path.join("..", "OfficialDataSrc", "Poland", "hospitalBeds.csv")
 filePathDe = os.path.join("..", "OfficialDataSrc", "Germany_RKI", "Fallzahlen_Gesamtuebersicht.xlsx")
 filePathDeCsv = os.path.join("..", "OfficialDataSrc", "Germany_RKI", "Fallzahlen_Gesamtuebersicht.csv")
 filePathOwid = os.path.join("..", "OfficialDataSrc", "OWID", "owid-covid-data.csv")
@@ -56,6 +59,7 @@ def convDate2WeekSum(dateList, dataList):
         prevWeek = week
     return dateWeek, data
 
+    
 class DataHandler:    
     #this function will be used for downloading and converting all data. For now it's hard to handle RKI xlsx.
     def parsePercentCell(self, val):
@@ -390,6 +394,29 @@ class PolishDeathData:
         csvOut = csvOut.loc[:, (csvOut != 0).any(axis=0)]
         csvOut.to_csv(filePathW, index=False)
         
+    def createHospitalCsv(self):
+        req = urllib.request.Request(polHospitalUrl)
+        resp = urllib.request.urlopen(req)
+        respData = resp.read()
+        date, data = zip(*re.findall('\{arg: \"([0-9.]{10})\",p_szpital\: ([0-9]+),p_chorzy\: [0-9]+,\},', str(respData)))
+        # All hospital beds in Poland on 2021-11-03 - https://bdl.stat.gov.pl/BDL/dane/podgrup/temat - Łóżka w szpitalach ogólnych - wskaźniki (P2454)
+        allHospBed = [167567 for i in range(len(date))]
+        #https://twitter.com/MZ_GOV_PL/status/1479739653452357632?s=20
+        allCovBed = [30818 for i in range(len(date))]
+        
+        csv = pd.DataFrame(columns=['Data', 'Wszystkie łóżka w szpitalach ogólnych', 'Zarezerwowane łóżka COV', 'Zajęte łóżka COV'])
+        csv['Data'] = date
+        csv['Wszystkie łóżka w szpitalach ogólnych'] = allHospBed
+        csv['Zarezerwowane łóżka COV'] = allCovBed
+        csv['Zajęte łóżka COV'] = data
+        
+        logging.info('Create ' + filePathPolHospital)
+        logging.info('Reserved Covid beds: ' + str(int(allCovBed[0])/int(allHospBed[0])*100) + '%')
+        logging.info('Occupied Covid beds: ' + str(int(data[-1])/int(allHospBed[0])*100) + '%')
+        logging.info('Occupied/Reserved Covid beds: ' + str(int(data[-1])/int(allCovBed[0])*100) + '%')
+        
+        csv.to_csv(filePathPolHospital, index=False)
+        
     def getDeathsFromDate(self, date):
         return GenericCountryDeathData("Poland", [death.cov for death in self.deathList if death.date >= date])
 
@@ -446,6 +473,7 @@ if __name__ == '__main__':
     logging.info('Running script for ' + config['COUNTRIES']['List'] + ' countries')
     dataCtx = DataHandler()
     if True == dataCtx.prepareData():
+        PolishDeathData().createHospitalCsv()
         csvCreator = GenericCsvDeathCreator(config['COUNTRIES']['List'].split(','), config['COUNTRIES']['CsvHdr'].split(','))
         csvCreator.createCsv(datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(int(config['DATA_RANGE']['AllCountries'])),
                              config['DATA_RANGE']['AllDeathsYears'].split(','), config['DATA_RANGE']['AllDeathsCovYear'].split(','))
