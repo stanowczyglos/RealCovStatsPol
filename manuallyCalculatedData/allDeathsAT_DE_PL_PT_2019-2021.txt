@@ -1,0 +1,21 @@
+Źródła:
+1. Austria:
+a. Populacja: https://www.statistik.at/web_en/statistics/PeopleSociety/population/population_stock_and_population_change/total_population_at_the_beginning_of_the_year_guarter/028625.html/
+b. Zgony: https://data.statistik.gv.at/web/meta.jsp?dataset=OGD_gest_kalwo_GEST_KALWOCHE_100
+c. COVID: https://covid.ourworldindata.org/data/owid-covid-data.csv
+
+2. Niemcy:
+a. Populacja: https://www.destatis.de/DE/Themen/Querschnitt/Demografischer-Wandel/_inhalt.html
+b. Zgony: https://www.destatis.de/DE/Themen/Gesellschaft-Umwelt/Bevoelkerung/Sterbefaelle-Lebenserwartung/Tabellen/sonderauswertung-sterbefaelle.html
+c. COVID: https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/Daten/Fallzahlen_Gesamtuebersicht.html;jsessionid=B851E5CE2A58119374E9C4F429676D3C.internet071?nn=13490888
+
+3. Polska:
+a. Populacja: https://stat.gov.pl/podstawowe-dane/
+b. Zgony: https://dane.gov.pl/pl/dataset/1953,liczba-zgonow-zarejestrowanych-w-rejestrze-stanu-cywilnego/resource/35662/table?page=1&per_page=20&q=&sort=
+c. COVID: https://www.gov.pl/web/koronawirus/wykaz-zarazen-koronawirusem-sars-cov-2
+
+4. Portugalia:
+a. https://www.ine.pt/xportal/xmain?xpid=INE&xpgid=ine_indicadores&indOcorrCod=0010112&contexto=bd&selTab=tab2/https:/
+b. www.ine.pt/xportal/xmain?xpid=INE&xpgid=ine_main
+c. COVID: https://covid.ourworldindata.org/data/owid-covid-data.csv
+
