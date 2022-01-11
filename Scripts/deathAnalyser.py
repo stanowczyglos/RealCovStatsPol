@@ -13,7 +13,7 @@ import re
 
 #data sources to be downloaded
 polUrl = 'https://arcgis.com/sharing/rest/content/items/a8c562ead9c54e13a135b02e0d875ffb/data'
-uscUrl = 'https://api.dane.gov.pl/resources/35662,liczba-zgonow-zarejestrowanych-w-rejestrze-stanu-cywilnego-w-okresie-od-1-wrzesnia-2015-r-dane-tygodniowe/csv'
+uscUrl = 'https://api.dane.gov.pl/resources/35766,liczba-zgonow-zarejestrowanych-w-rejestrze-stanu-cywilnego-w-okresie-od-1-wrzesnia-2015-r-dane-tygodniowe/csv'
 basiwDeathUrl = 'https://basiw.mz.gov.pl/api/download/file?fileName=covid_pbi/zakaz_zgony_BKO/zgony.csv'
 basiwCasesUrl = 'https://basiw.mz.gov.pl/api/download/file?fileName=covid_pbi/zakaz_zgony_BKO/zakazenia.csv'
 polHospitalUrl = 'https://koronawirusunas.pl/u/polska-szpital'
@@ -36,6 +36,8 @@ filePathAllDeathWeek = os.path.join("..", "calculatedData", "allDeathComparisonW
 filePathAllDeathCum = os.path.join("..", "calculatedData", "allDeathComparisonCumulative.csv")
 filePathPolDeathCalc = os.path.join("..", "calculatedData", "polDeathsCalc.csv")
 filePathPolCasesCalc = os.path.join("..", "calculatedData", "polCasesCalc.csv")
+filePathPolDeathWeeklyCalc = os.path.join("..", "calculatedData", "polDeathsWeeklyCalc.csv")
+filePathPolCasesWeeklyCalc = os.path.join("..", "calculatedData", "polCasesWeeklyCalc.csv")
 
 def convDate2WeekSum(dateList, dataList):
     if len(dateList) != len(dataList):
@@ -97,9 +99,9 @@ class DataHandler:
             with ZipFile(filePathPol, 'r') as zipObj:
                 zipObj.extractall(os.path.split(filePathPol)[0])
         
-        self.downloadData(basiwDeathUrl, filePathPolDeath, False)
-        self.downloadData(basiwCasesUrl, filePathPolCases, False)
-        self.downloadData(uscUrl, filePathPolUsc, False)
+#        self.downloadData(basiwDeathUrl, filePathPolDeath, False)
+#        self.downloadData(basiwCasesUrl, filePathPolCases, False)
+        #self.downloadData(uscUrl, filePathPolUsc, False)
         
         #download and prepare german data
         if True == self.downloadData(deUrl, filePathDe):
@@ -303,36 +305,76 @@ class PolishDeathData:
         logging.info('Create: ' + filePathAllDeathCum)
         csvOut.to_csv(filePathAllDeathCum, index=False)
     
-    def createBASIWCsv(self, dataType, startDate, endDate, ageRange):
+    def createBASIWCsv(self, dataType, analyzerEn, analyzerDateRange, ageDateRange, ageRange):
         ageCol = 'wiek'
         ageCatCol = 'kat_wiek'
         doseCatCol = 'dawka_ost'
         isSickCol = 'czy_wspolistniejace'
-
         if 'cases' == dataType:
             dateCol = 'data_rap_zakazenia'
             caseNoCol = 'liczba_zaraportowanych_zakazonych'
             filePathR = filePathPolCases
             filePathW = filePathPolCasesCalc
+            filePathWeekW = filePathPolCasesWeeklyCalc
             useAllCalc = False
         else:
             dateCol = 'data_rap_zgonu'
             caseNoCol = 'liczba_zaraportowanych_zgonow'
             filePathR = filePathPolDeath
             filePathW = filePathPolDeathCalc
+            filePathWeekW = filePathPolDeathWeeklyCalc
             useAllCalc = True
             
+        maskAnd = ' and '
+        maskOr = ' or '
+        maskBooster = '(' + doseCatCol + '== "uzupelniajaca"' + maskOr + doseCatCol + '== "przypominajaca"' + ')'
+        maskVax = '(' + doseCatCol + '== "pelna_dawka"' + ')'
+        maskHalfVax = '(' + doseCatCol + '== "jedna_dawka"' + ')'
+        maskNoVax = '(' + doseCatCol + '== 0)'
+        
+        df = pd.read_csv(filePathR, sep=';')
+        df[dateCol] = pd.to_datetime(df[dateCol])
+        df = df.fillna(0)
+        df.sort_values(by=[dateCol, ageCatCol, ageCol], inplace=True)
+        if True == analyzerEn:
+            dateRange = (df[dateCol] >= analyzerDateRange[0]) & (df[dateCol] <= analyzerDateRange[1])
+            df_tmp = df[dateRange].copy()
+            df_tmp.loc[:, 'tydzien'] = df_tmp[dateCol].dt.strftime('%GW%V')
+            
+            listWeek = []
+            listNoVax = []
+            listHalfVax = []
+            listVax = []
+            listBooster = []
+            dat = datetime.strptime(df_tmp['tydzien'].values[0]+'/1', '%GW%V/%w')
+            while 1:
+                week = dat.strftime('%GW%V/%w').split('/')[0]
+                maskWeek = '(tydzien=="'+week+'")'
+                listWeek.append(week)
+                listNoVax.append(df_tmp.query(maskWeek + maskAnd + maskNoVax)[caseNoCol].sum())
+                listHalfVax.append(df_tmp.query(maskWeek + maskAnd + maskHalfVax)[caseNoCol].sum())
+                listVax.append(df_tmp.query(maskWeek + maskAnd + maskVax)[caseNoCol].sum())
+                listBooster.append(df_tmp.query(maskWeek + maskAnd + maskBooster)[caseNoCol].sum())
+                if listNoVax[-1] == listHalfVax[-1] == listVax[-1] == listBooster[-1]:
+                    break
+                dat += timedelta(weeks=1)
+
+            maxLen = len(listWeek)-1
+            csvWeek = pd.DataFrame()
+            csvWeek['Tydzien'] = listWeek[:maxLen]
+            csvWeek['Nieszczepiony'] = listNoVax[:maxLen]
+            csvWeek['Szczepiony 1/2'] = listHalfVax[:maxLen]
+            csvWeek['Szczepiony'] = listVax[:maxLen]
+            csvWeek['Booster'] = listBooster[:maxLen]
+            
+            csvWeek.to_csv(filePathWeekW, index=False)
+        
         dataList = []
         for age in ageRange:
             dataList.append(self.AgeElem(age, useAllCalc))
         dataList.append(self.AgeElem((-1,-1), useAllCalc))
-        
-        df = pd.read_csv(filePathR, sep=';')
-        df[dateCol] = pd.to_datetime(df[dateCol])
-        dateRange = (df[dateCol] >= startDate) & (df[dateCol] <= endDate)
+        dateRange = (df[dateCol] >= ageDateRange[0]) & (df[dateCol] <= ageDateRange[1])
         df = df[dateRange]
-        df.sort_values(by=[ageCatCol, ageCol], inplace=True)
-        df = df.fillna(0)
         for elem in dataList:
             maskAnd = ' and '
             maskOr = ' or '
@@ -340,10 +382,6 @@ class PolishDeathData:
                 maskAge = '(' + ageCol + '>=' + str(elem.ageThreshold[0]) + maskAnd + ageCol + '<=' + str(elem.ageThreshold[1]) + maskAnd + ageCatCol + '!= "BD")'
             else:
                 maskAge = '(' + ageCol + '== 0 and ' + ageCatCol +'== "BD")'
-            maskBooster = '(' + doseCatCol + '== "uzupelniajaca"' + maskOr + doseCatCol + '== "przypominajaca"' + ')'
-            maskVax = '(' + doseCatCol + '== "pelna_dawka"' + ')'
-            maskHalfVax = '(' + doseCatCol + '== "jedna_dawka"' + ')'
-            maskNoVax = '(' + doseCatCol + '== 0)'
             maskGeneric = maskAge
             if True == elem.useAllCalc:
                 maskGeneric = maskAge + maskAnd + '(' + isSickCol + '== "N")'
@@ -416,7 +454,7 @@ class PolishDeathData:
         logging.info('Occupied/Reserved Covid beds: ' + str(int(data[-1])/int(allCovBed[0])*100) + '%')
         
         csv.to_csv(filePathPolHospital, index=False)
-        
+
     def getDeathsFromDate(self, date):
         return GenericCountryDeathData("Poland", [death.cov for death in self.deathList if death.date >= date])
 
@@ -471,16 +509,21 @@ if __name__ == '__main__':
         logLvl = logging.INFO
     logging.basicConfig(format=logFormat, level=logLvl)
     logging.info('Running script for ' + config['COUNTRIES']['List'] + ' countries')
+
     dataCtx = DataHandler()
     if True == dataCtx.prepareData():
         PolishDeathData().createHospitalCsv()
         csvCreator = GenericCsvDeathCreator(config['COUNTRIES']['List'].split(','), config['COUNTRIES']['CsvHdr'].split(','))
         csvCreator.createCsv(datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(int(config['DATA_RANGE']['AllCountries'])),
                              config['DATA_RANGE']['AllDeathsYears'].split(','), config['DATA_RANGE']['AllDeathsCovYear'].split(','))
-        
-        PolishDeathData().createBASIWCsv('cases', datetime.strptime(config['AGE_STAT']['PolAgeStartDate'], '%Y-%m-%d'),
-                                       datetime.strptime(config['AGE_STAT']['PolAgeEndDate'], '%Y-%m-%d'), eval(config['AGE_STAT']['PolAgerange']))
-        PolishDeathData().createBASIWCsv('deaths', datetime.strptime(config['AGE_STAT']['PolAgeStartDate'], '%Y-%m-%d'),
-                                       datetime.strptime(config['AGE_STAT']['PolAgeEndDate'], '%Y-%m-%d'), eval(config['AGE_STAT']['PolAgerange']))
-        dataCtx.cleanupData()
+
+        PolishDeathData().createBASIWCsv('cases', config['BASIW_STAT']['PolCaseDeathAnalyze'] == 'yes',
+                                         (datetime.strptime(config['BASIW_STAT']['PolCaseDeathStartDate'], '%Y-%m-%d'), datetime.strptime(config['BASIW_STAT']['PolCaseDeathEndDate'], '%Y-%m-%d')),
+                                         (datetime.strptime(config['BASIW_STAT']['PolAgeStartDate'], '%Y-%m-%d'), datetime.strptime(config['BASIW_STAT']['PolAgeEndDate'], '%Y-%m-%d')),
+                                         eval(config['BASIW_STAT']['PolAgerange']))
+        PolishDeathData().createBASIWCsv('deaths', config['BASIW_STAT']['PolCaseDeathAnalyze'] == 'yes',
+                                         (datetime.strptime(config['BASIW_STAT']['PolCaseDeathStartDate'], '%Y-%m-%d'), datetime.strptime(config['BASIW_STAT']['PolCaseDeathEndDate'], '%Y-%m-%d')),
+                                         (datetime.strptime(config['BASIW_STAT']['PolAgeStartDate'], '%Y-%m-%d'), datetime.strptime(config['BASIW_STAT']['PolAgeEndDate'], '%Y-%m-%d')),
+                                         eval(config['BASIW_STAT']['PolAgerange']))
+    dataCtx.cleanupData()
 
