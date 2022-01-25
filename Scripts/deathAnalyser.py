@@ -433,7 +433,7 @@ class PolishDeathData:
             maskGeneric = maskAge
 
             if True == elem.useAllCalc:
-                maskGeneric = maskAge + maskAnd + '(' + isSickCol + '== "0")'
+                maskGeneric = maskAge + maskAnd + '(' + isSickCol + '== 0)'
                 
             elem.category.vaxHalf[0] = df.query(maskGeneric + maskAnd + maskHalfVax)[caseNoCol].sum()
             elem.category.boost[0] = df.query(maskGeneric + maskAnd + maskBooster)[caseNoCol].sum()
@@ -441,7 +441,7 @@ class PolishDeathData:
             elem.category.noVax[0] = df.query(maskGeneric + maskAnd + maskNoVax)[caseNoCol].sum()
             
             if True == elem.useAllCalc:
-                maskGeneric = maskAge + maskAnd + '(' + isSickCol + '== "1")'
+                maskGeneric = maskAge + maskAnd + '(' + isSickCol + '== 1)'
                 elem.category.vaxHalfMore[0] = df.query(maskGeneric + maskAnd + maskHalfVax)[caseNoCol].sum()
                 elem.category.boostMore[0] = df.query(maskGeneric + maskAnd + maskBooster)[caseNoCol].sum()
                 elem.category.vaxMore[0] = df.query(maskGeneric + maskAnd + maskVax)[caseNoCol].sum()
