@@ -29,7 +29,6 @@ filePathPolVaxZip = os.path.join("..", "OfficialDataSrc", "Poland", "VaxData", "
 filePathPolUsc = os.path.join("..", "OfficialDataSrc", "Poland", "allDeathsWeekly.csv")
 filePathPolDeath = os.path.join("..", "OfficialDataSrc", "Poland", "zgony.csv")
 filePathPolCases = os.path.join("..", "OfficialDataSrc", "Poland", "zakazenia.csv")
-filePathPolHospital = os.path.join("..", "OfficialDataSrc", "Poland", "hospitalBeds.csv")
 filePathDe = os.path.join("..", "OfficialDataSrc", "Germany_RKI", "Fallzahlen_Gesamtuebersicht.xlsx")
 filePathDeCsv = os.path.join("..", "OfficialDataSrc", "Germany_RKI", "Fallzahlen_Gesamtuebersicht.csv")
 filePathEcdc = os.path.join("..", "OfficialDataSrc", "ECDC", "ecdc-vax-data.csv")
@@ -46,6 +45,7 @@ filePathPolDeathWeeklyCalc = os.path.join("..", "calculatedData", "polDeathsWeek
 filePathPolDeathDailyCalc = os.path.join("..", "calculatedData", "polDeathsDaylyCalc.csv")
 filePathPolCasesWeeklyCalc = os.path.join("..", "calculatedData", "polCasesWeeklyCalc.csv")
 filePathPolCasesDailyCalc = os.path.join("..", "calculatedData", "polCasesDailyCalc.csv")
+filePathPolHospital = os.path.join("..", "calculatedData", "hospitalBeds.csv")
 filePathEcdcVaxCalc = os.path.join("..", "calculatedData", "vaxWeeklyCalc.csv")
 
 def convDate2WeekSum(dateList, dataList):
@@ -261,8 +261,10 @@ class PolishDeathData:
             tmpCsv = self.csvOut.loc[:, ['Data', 'Zgony COV+współistniejące', 'Zgony sam COV', 'Zgony COV+współistniejące narastająco', 'Zgony sam COV narastająco']]
             tmpCsv.to_csv(filePathSinceBeginning, index=False)
             
-            casesInit = 876333# + 23911
-            recoveredInit = 454717# + 169171
+            casesInit = 0#876333# + 23911
+            recoveredInit = 0#454717# + 169171
+            #initial data of active cases taken from: https://twitter.com/synxchaosu/status/1432985070843879431
+            activeCaseInit = 156596
             self.csvOut.set_index('Data', inplace=True)
             self.csvOut = self.csvOut.loc[startDate :, :].copy()
             self.csvOut['Zgony COV+współistniejące narastająco'] = self.csvOut['Zgony COV+współistniejące'].cumsum()
@@ -270,6 +272,7 @@ class PolishDeathData:
             self.csvOut['Przypadki narastająco'] = self.csvOut['Przypadki'].cumsum() + casesInit
             self.csvOut['Ozdrowieńcy narastająco'] = self.csvOut['Ozdrowieńcy'].cumsum() + recoveredInit
             self.csvOut['Aktywne przypadki'] = self.csvOut['Przypadki narastająco'] - self.csvOut['Zgony COV+współistniejące narastająco'] - self.csvOut['Ozdrowieńcy narastająco']
+            self.csvOut['Aktywne przypadki'] += activeCaseInit
             self.csvOut['Kwarantanna + Izolacja'] = self.csvOut['Aktywne przypadki'] + self.csvOut['Osoby na kwarantannie']
             self.csvOut['% pozytywnych testów'] = self.csvOut['Testy pozytywne'] / self.csvOut['Wykonane testy']
             self.csvOut.to_csv(filePathcaseDeathIsolation)
@@ -429,7 +432,7 @@ class PolishDeathData:
                 
                 currDate += timedelta(days=1)
 
-            maxLen = len(listWeek)-1
+            maxLen = len(listWeek)
             csvLines['Data'] = listWeek[:maxLen]
             csvLines['Nieszczepiony'] = listNoVax[:maxLen]
             csvLines['Szczepiony'] = listVax[:maxLen]
@@ -515,7 +518,7 @@ class PolishDeathData:
         # All hospital beds in Poland on 2021-11-03 - https://bdl.stat.gov.pl/BDL/dane/podgrup/temat - Łóżka w szpitalach ogólnych - wskaźniki (P2454)
         allHospBed = [167567 for i in range(len(date))]
         #https://twitter.com/MZ_GOV_PL/status/1479739653452357632?s=20
-        allCovBed = [30818 for i in range(len(date))]
+        allCovBed = [30551 for i in range(len(date))]
         
         csv = pd.DataFrame(columns=['Data', 'Wszystkie łóżka w szpitalach ogólnych', 'Zarezerwowane łóżka COV', 'Zajęte łóżka COV'])
         csv['Data'] = date
