@@ -213,25 +213,25 @@ class PolishDeathData:
     population = 0
             
     class AgeElem:
-        def __init__(self, ageThreshold, useAllCalc=True):
+        def __init__(self, ageThreshold, useAllCalc, phrase):
             self.ageThreshold = ageThreshold
             self.useAllCalc = useAllCalc
-            self.category = self.DeathCategory(useAllCalc)
+            self.category = self.DeathCategory(useAllCalc, phrase)
             
         class DeathCategory:
-            def __init__(self, useAllCalc=True):
+            def __init__(self, useAllCalc=True, phrase='(ch. współ.)'):
                 self.vaxHalf = [0, 'Szczepieni 1/2']
                 if True == useAllCalc:
-                    self.vaxHalfMore = [0, 'Szczepieni 1/2 (ch. współ.)']
+                    self.vaxHalfMore = [0, 'Szczepieni 1/2 ' + phrase]
                 self.boost = [0, 'Booster']
                 if True == useAllCalc:
-                    self.boostMore = [0, 'Booster (ch. współ.)']
+                    self.boostMore = [0, 'Booster ' + phrase]
                 self.vax = [0, 'Szczepieni']
                 if True == useAllCalc:
-                    self.vaxMore = [0, 'Szczepieni (ch. współ.)']
+                    self.vaxMore = [0, 'Szczepieni ' + phrase]
                 self.noVax = [0, 'Nieszczepieni']
                 if True == useAllCalc:
-                    self.noVaxMore = [0, 'Nieszczepieni (ch. współ.)']
+                    self.noVaxMore = [0, 'Nieszczepieni ' + phrase]
         
     class ParserElement:
         def __init__(self, dirPath, sumRow, columns, initHandler, handler, startDate):
@@ -390,19 +390,23 @@ class PolishDeathData:
         if 'cases' == dataType:
             dateCol = 'data_rap_zakazenia'
             caseNoCol = 'liczba_zaraportowanych_zakazonych'
+            caseRepeatNoCol = 'numer_zarazenia'
             filePathR = filePathPolCases
             filePathW = filePathPolCasesCalc
             filePathWeekW = filePathPolCasesWeeklyCalc
             filePathDailyW = filePathPolCasesDailyCalc
             useAllCalc = False
+            phrase = '(ponowne)'
         else:
             dateCol = 'data_rap_zgonu'
             caseNoCol = 'liczba_zaraportowanych_zgonow'
+            caseRepeatNoCol = ''
             filePathR = filePathPolDeath
             filePathW = filePathPolDeathCalc
             filePathWeekW = filePathPolDeathWeeklyCalc
             filePathDailyW = filePathPolDeathDailyCalc
             useAllCalc = True
+            phrase = '(ch. współ.)'
             
         maskAnd = ' and '
         maskOr = ' or '
@@ -416,9 +420,17 @@ class PolishDeathData:
         df = df.fillna(0)
         df.sort_values(by=[dateCol, ageCatCol, ageCol], inplace=True)
         if True == analyzerEn:
-            listWeek = []
+            listDay = []
             listNoVax = []
             listVax = []
+            listOneTime = []
+            listTwoTimes = []
+            listThreeTimes = []
+            listFourTimes = []
+            listOneTimeVax = []
+            listTwoTimesVax = []
+            listThreeTimesVax = []
+            listFourTimesVax = []
             currDate = analyzerDateRange[0]
             csvLines = pd.DataFrame()
             while currDate <= analyzerDateRange[1]:
@@ -426,16 +438,56 @@ class PolishDeathData:
                 df_tmp = df[dateFilter].copy()
                 noVax = df_tmp.query(maskNoVax)[caseNoCol].sum() + df_tmp.query(maskHalfVax)[caseNoCol].sum()
                 vax = df_tmp.query(maskVax)[caseNoCol].sum() + df_tmp.query(maskBooster)[caseNoCol].sum()
-                listWeek.append(currDate.strftime('%Y-%m-%d'))
+                if 'numer_zarazenia' == caseRepeatNoCol:
+                    repeated = df_tmp.query(caseRepeatNoCol + '== 1 and (' + maskNoVax + maskOr + maskHalfVax + ')')[caseNoCol].sum()
+                    listOneTime.append(repeated)
+                    repeated = df_tmp.query(caseRepeatNoCol + '== 2 and (' + maskNoVax + maskOr + maskHalfVax + ')')[caseNoCol].sum()
+                    listTwoTimes.append(repeated)
+                    repeated = df_tmp.query(caseRepeatNoCol + '== 3 and (' + maskNoVax + maskOr + maskHalfVax + ')')[caseNoCol].sum()
+                    listThreeTimes.append(repeated)
+                    repeated = df_tmp.query(caseRepeatNoCol + '== 4 and (' + maskNoVax + maskOr + maskHalfVax + ')')[caseNoCol].sum()
+                    listFourTimes.append(repeated)
+                    repeated = df_tmp.query(caseRepeatNoCol + '== 1 and (' + maskVax + maskOr + maskBooster + ')')[caseNoCol].sum()
+                    listOneTimeVax.append(repeated)
+                    repeated = df_tmp.query(caseRepeatNoCol + '== 2 and (' + maskVax + maskOr + maskBooster + ')')[caseNoCol].sum()
+                    listTwoTimesVax.append(repeated)
+                    repeated = df_tmp.query(caseRepeatNoCol + '== 3 and (' + maskVax + maskOr + maskBooster + ')')[caseNoCol].sum()
+                    listThreeTimesVax.append(repeated)
+                    repeated = df_tmp.query(caseRepeatNoCol + '== 4 and (' + maskVax + maskOr + maskBooster + ')')[caseNoCol].sum()
+                    listFourTimesVax.append(repeated)
+                listDay.append(currDate.strftime('%Y-%m-%d'))
                 listNoVax.append(noVax)
                 listVax.append(vax)
                 
                 currDate += timedelta(days=1)
 
-            maxLen = len(listWeek)
-            csvLines['Data'] = listWeek[:maxLen]
-            csvLines['Nieszczepiony'] = listNoVax[:maxLen]
-            csvLines['Szczepiony'] = listVax[:maxLen]
+            maxLen = len(listDay)
+            csvLines['Data'] = listDay
+            csvLines['Nieszczepiony'] = listNoVax
+            csvLines['Szczepiony'] = listVax
+            if 'numer_zarazenia' == caseRepeatNoCol:
+                csvLines['Zakażeni 1 raz (n.sz.)'] = listOneTime
+                csvLines['Zakażeni 2 razy (n.sz.)'] = listTwoTimes
+                csvLines['Zakażeni 3 razy (n.sz.)'] = listThreeTimes
+                csvLines['Zakażeni 4 razy (n.sz.)'] = listFourTimes
+                csvLines['Zakażeni 1 raz (sz.)'] = listOneTimeVax
+                csvLines['Zakażeni 2 razy (sz.)'] = listTwoTimesVax
+                csvLines['Zakażeni 3 razy (sz.)'] = listThreeTimesVax
+                csvLines['Zakażeni 4 razy (sz.)'] = listFourTimesVax
+                csvLines['Zakażeni 1 raz (n.sz.)'] -= csvLines['Zakażeni 2 razy (n.sz.)']
+                csvLines['Zakażeni 2 razy (n.sz.)'] -= csvLines['Zakażeni 3 razy (n.sz.)']
+                csvLines['Zakażeni 3 razy (n.sz.)'] -= csvLines['Zakażeni 4 razy (n.sz.)']
+                csvLines['Zakażeni 1 raz (sz.)'] -= csvLines['Zakażeni 2 razy (sz.)']
+                csvLines['Zakażeni 2 razy (sz.)'] -= csvLines['Zakażeni 3 razy (sz.)']
+                csvLines['Zakażeni 3 razy (sz.)'] -= csvLines['Zakażeni 4 razy (sz.)']
+                csvLines['Zakażeni 1 raz (n.sz.)'] = csvLines['Zakażeni 1 raz (n.sz.)'].cumsum()
+                csvLines['Zakażeni 2 razy (n.sz.)'] = csvLines['Zakażeni 2 razy (n.sz.)'].cumsum()
+                csvLines['Zakażeni 3 razy (n.sz.)'] = csvLines['Zakażeni 3 razy (n.sz.)'].cumsum()
+                csvLines['Zakażeni 4 razy (n.sz.)'] = csvLines['Zakażeni 4 razy (n.sz.)'].cumsum()
+                csvLines['Zakażeni 1 raz (sz.)'] = csvLines['Zakażeni 1 raz (sz.)'].cumsum()
+                csvLines['Zakażeni 2 razy (sz.)'] = csvLines['Zakażeni 2 razy (sz.)'].cumsum()
+                csvLines['Zakażeni 3 razy (sz.)'] = csvLines['Zakażeni 3 razy (sz.)'].cumsum()
+                csvLines['Zakażeni 4 razy (sz.)'] = csvLines['Zakażeni 4 razy (sz.)'].cumsum()
             csvLines.to_csv(filePathDailyW, index=False)
             
             csvLines['Data'] = pd.to_datetime(csvLines['Data'])
@@ -448,8 +500,8 @@ class PolishDeathData:
             csvLines.to_csv(filePathWeekW, index=False)
         dataList = []
         for age in ageRange:
-            dataList.append(self.AgeElem(age, useAllCalc))
-        dataList.append(self.AgeElem((-1,-1), useAllCalc))
+            dataList.append(self.AgeElem(age, True, phrase))
+        dataList.append(self.AgeElem((-1,-1), True, phrase))
         dateRange = (df[dateCol] >= ageDateRange[0]) & (df[dateCol] <= ageDateRange[1])
         df = df[dateRange]
         for elem in dataList:
@@ -461,15 +513,20 @@ class PolishDeathData:
                 maskAge = '(' + ageCol + '== 0 and ' + ageCatCol +'== "BD")'
             maskGeneric = maskAge
 
-            if True == elem.useAllCalc:
+            if '' == caseRepeatNoCol and True == elem.useAllCalc:
                 maskGeneric = maskAge + maskAnd + '(' + isSickCol + '== 0)'
                 
             elem.category.vaxHalf[0] = df.query(maskGeneric + maskAnd + maskHalfVax)[caseNoCol].sum()
             elem.category.boost[0] = df.query(maskGeneric + maskAnd + maskBooster)[caseNoCol].sum()
             elem.category.vax[0] = df.query(maskGeneric + maskAnd + maskVax)[caseNoCol].sum()
             elem.category.noVax[0] = df.query(maskGeneric + maskAnd + maskNoVax)[caseNoCol].sum()
-            
-            if True == elem.useAllCalc:
+            if '' != caseRepeatNoCol:
+                maskGeneric = maskAge + maskAnd + '(numer_zarazenia > 1)'
+                elem.category.vaxHalfMore[0] = df.query(maskGeneric + maskAnd + maskHalfVax)[caseNoCol].sum()
+                elem.category.boostMore[0] = df.query(maskGeneric + maskAnd + maskBooster)[caseNoCol].sum()
+                elem.category.vaxMore[0] = df.query(maskGeneric + maskAnd + maskVax)[caseNoCol].sum()
+                elem.category.noVaxMore[0] = df.query(maskGeneric + maskAnd + maskNoVax)[caseNoCol].sum()
+            elif True == elem.useAllCalc:
                 maskGeneric = maskAge + maskAnd + '(' + isSickCol + '== 1)'
                 elem.category.vaxHalfMore[0] = df.query(maskGeneric + maskAnd + maskHalfVax)[caseNoCol].sum()
                 elem.category.boostMore[0] = df.query(maskGeneric + maskAnd + maskBooster)[caseNoCol].sum()
@@ -479,10 +536,10 @@ class PolishDeathData:
         sumVaccinated = 0
         for elem in dataList:
             sumNotVaccinated += elem.category.noVax[0] + elem.category.vaxHalf[0]
-            if True == elem.useAllCalc:
+            if True == elem.useAllCalc and '' == caseRepeatNoCol:
                 sumNotVaccinated += elem.category.noVaxMore[0] + elem.category.vaxHalfMore[0]
             sumVaccinated += elem.category.vax[0] + elem.category.boost[0]
-            if True == elem.useAllCalc:
+            if True == elem.useAllCalc and '' == caseRepeatNoCol:
                 sumVaccinated += elem.category.vaxMore[0] + elem.category.boostMore[0]
         sumAll = sumNotVaccinated + sumVaccinated
         logging.info('Number of records in ' + filePathR + ': ' + str(sumAll))
@@ -495,8 +552,8 @@ class PolishDeathData:
         dict = vars(dataList[0].category)
         list = []
         for key in vars(dataList[0].category):
-            if 'More' not in key or (dataType != 'cases' and 'More' in key):
-                list.append(dict[key][1])
+            #if 'More' not in key or (dataType != 'cases' and 'More' in key):
+            list.append(dict[key][1])
         iter = 0
         csvOut = pd.DataFrame()
         csvOut['Stan'] = pd.Series(list)
