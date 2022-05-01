@@ -10,6 +10,7 @@ import urllib.request
 import configparser
 import logging
 import re
+from numpy import nan
 
 #data sources to be downloaded
 polDeathsUrl = 'https://arcgis.com/sharing/rest/content/items/a8c562ead9c54e13a135b02e0d875ffb/data'
@@ -25,6 +26,7 @@ owidUrl = 'https://covid.ourworldindata.org/data/owid-covid-data.csv'
 ecdcUrl = 'https://opendata.ecdc.europa.eu/covid19/vaccine_tracker/csv/data.csv'
 
 filePathPolDeathZip = os.path.join("..", "OfficialDataSrc", "Poland", "DeathData", "arch.zip")
+filePathPolInitialDeath = os.path.join("..", "OfficialDataSrc", "Poland", "DeathData", "Zakazenia30323112020.csv")
 filePathPolVaxZip = os.path.join("..", "OfficialDataSrc", "Poland", "VaxData", "arch.zip")
 filePathPolUsc = os.path.join("..", "OfficialDataSrc", "Poland", "allDeathsWeekly.csv")
 filePathPolDeath = os.path.join("..", "OfficialDataSrc", "Poland", "zgony.csv")
@@ -245,15 +247,22 @@ class PolishDeathData:
     def initDeaths(self,):
         self.csvOut = pd.DataFrame(columns=['Data', 'Zgony COV+współistniejące', 'Zgony sam COV', 'Przypadki', 'Osoby na kwarantannie',
                                             'Wykonane testy', 'Testy pozytywne', 'Ozdrowieńcy'])
+        initCsv = pd.read_csv(filePathPolInitialDeath, delimiter=';', encoding='Windows-1250')
+        self.csvOut['Data'] = initCsv['Data']
+        self.csvOut['Zgony COV+współistniejące'] = initCsv['Zgony']
+        self.csvOut['Zgony sam COV'] = pd.Series(initCsv['Zgony']*0.24).round(0)
+        self.csvOut['Ozdrowieńcy'] = initCsv['Ozdrowieńcy (dzienna)']
+        self.csvOut['Testy pozytywne'] = initCsv['Kwarantanna']
+        
     def parserDeaths(self, data, isFinal, startDate=None, filter=None):
         if False == isFinal:
             data.extend([0] * (self.csvOut.columns.size - len(data)))
             self.csvOut.loc[len(self.csvOut)] = data
         else:
             #initial value taken from official Gov data for 23.11.2020
-            allDeaths = 13774
+            allDeaths = 0#13774
             #below factor was calculated according to 2021 data. Deaths ratio between COV alone reason and COV with coexisting illnesses is 0.24
-            covFactor = 0.24
+            covFactor = 1#0.24
             covDeaths = round(allDeaths * covFactor)
             self.csvOut['Zgony COV+współistniejące narastająco'] = self.csvOut['Zgony COV+współistniejące'].cumsum() + allDeaths
             self.csvOut['Zgony sam COV narastająco'] = self.csvOut['Zgony sam COV'].cumsum() + covDeaths
@@ -274,7 +283,7 @@ class PolishDeathData:
             self.csvOut['Aktywne przypadki'] = self.csvOut['Przypadki narastająco'] - self.csvOut['Zgony COV+współistniejące narastająco'] - self.csvOut['Ozdrowieńcy narastająco']
             self.csvOut['Aktywne przypadki'] += activeCaseInit
             self.csvOut['Kwarantanna + Izolacja'] = self.csvOut['Aktywne przypadki'] + self.csvOut['Osoby na kwarantannie']
-            self.csvOut['% pozytywnych testów'] = self.csvOut['Testy pozytywne'] / self.csvOut['Wykonane testy']
+            #self.csvOut['% pozytywnych testów'] = self.csvOut['Testy pozytywne'] / self.csvOut['Wykonane testy']
             self.csvOut.to_csv(filePathcaseDeathIsolation)
         
     def initVax(self,):
@@ -313,7 +322,7 @@ class PolishDeathData:
         self.population = int(pattern.groups()[0]+pattern.groups()[1])*1000
 
         parserList = [self.ParserElement(os.path.split(filePathPolDeathZip)[0], 0,
-                                         ['zgony', 'zgony_w_wyniku_covid_bez_chorob_wspolistniejacych', 'liczba_przypadkow', 'liczba_osob_objetych_kwarantanna',
+                                         ['zgony', 'zgony_w_wyniku_covid_bez_chorob_wspolistniejacych', ('liczba_przypadkow', 'liczba_wszystkich_zakazen'), 'liczba_osob_objetych_kwarantanna',
                                           'liczba_wykonanych_testow', 'liczba_testow_z_wynikiem_pozytywnym', ('liczba_ozdrowiencow','')],
                                          self.initDeaths, self.parserDeaths, startDate),
                       self.ParserElement(os.path.split(filePathPolVaxZip)[0], -1,
@@ -327,22 +336,22 @@ class PolishDeathData:
             for filename in files:
                 if -1 != filename.find('rap_rcb_'):
                     filter = []
-                    csv = pd.read_csv(os.path.join(elem.dirPath, filename), delimiter=';', encoding='iso-8859-1')
+                    csvIn = pd.read_csv(os.path.join(elem.dirPath, filename), delimiter=';', encoding='iso-8859-1')
                     if True == checkColumns:
                         for col in elem.columns:
                             if tuple == type(col):
                                 for tupCol in col:
-                                    if tupCol in csv.columns:
+                                    if tupCol in csvIn.columns:
                                         filter.append(tupCol)
                                         break
-                            elif col in csv.columns:
+                            elif col in csvIn.columns:
                                 filter.append(col)
                     else:
                         filter = elem.columns
                     dateStr = filename[:8]
                     
                     elem.handler([str(dateStr[:4]) + '-' + str(dateStr[4:6]) + '-' + str(dateStr[6:8])] + \
-                                 csv.loc[csv.index[elem.sumRow], filter].apply(int).values.tolist(), False, None, filter)
+                                 csvIn.loc[csvIn.index[elem.sumRow], filter].values.tolist(), False, None, filter)
             
             elem.handler(None, True, elem.startDate)
     
@@ -357,7 +366,7 @@ class PolishDeathData:
         csvDeaths['Tydzień'] = csvIn['Nr tygodnia']
         yearList.sort()
         for year in yearList:
-            csvDeaths['Wszystkie zgony w ' + year] = csvIn[year]
+            csvDeaths['Wszystkie ' + year] = csvIn[year]
 
         csv = pd.read_csv(filePathSinceBeginning)
         csv['Data'] = pd.to_datetime(csv['Data'])
@@ -366,12 +375,19 @@ class PolishDeathData:
             date2 = datetime.strptime(covYear+'W'+str(datetime.strptime(covYear+'-12-31', '%Y-%m-%d').isocalendar()[1])+'/0', '%GW%V/%w')
             dateRange = (csv['Data'] >= date1) & (csv['Data'] <= date2)
             tmp = csv[dateRange].copy()
+            #days = (tmp.loc[0,'Data'] - date1).days
+            
+            #tmp['Data'] = pd.concat([pd.date_range(date1, tmp.loc[0,'Data']), tmp['Data']])
+            #tmp.loc[0, 'Data'] = pd.Series(pd.date_range(date1, tmp.loc[0,'Data']))
+            #print(type(days))
+            #covList.append()
             covList.append(convDate2WeekSum(tmp['Data'].tolist(), tmp['Zgony sam COV'].tolist())[1])
             covSickList.append(convDate2WeekSum(tmp['Data'].tolist(), tmp['Zgony COV+współistniejące'].tolist())[1])
 
         for yearIdx in range(len(covYearList)):
-            csvDeaths['Zgony sam COV w ' + covYearList[yearIdx]] = pd.Series(covList[yearIdx])
-            csvDeaths['Zgony COV + ch. współ. w ' + covYearList[yearIdx]] = pd.Series(covSickList[yearIdx])
+            csvDeaths['COV ' + covYearList[yearIdx]] = pd.Series(covList[yearIdx])
+            csvDeaths['COV(ch. w.) ' + covYearList[yearIdx]] = pd.Series(covSickList[yearIdx])
+            csvDeaths['COV(wszystkie) ' + covYearList[yearIdx]] = csvDeaths['COV ' + covYearList[yearIdx]] + csvDeaths['COV(ch. w.) ' + covYearList[yearIdx]]
         
         csvDeaths.dropna(how='any', inplace=True)
         csvDeaths = csvDeaths.astype(int)
@@ -415,7 +431,7 @@ class PolishDeathData:
         maskHalfVax = '(' + doseCatCol + '== "jedna_dawka"' + ')'
         maskNoVax = '(' + doseCatCol + '== 0)'
         
-        df = pd.read_csv(filePathR, delimiter=';', encoding='Windows-1250', dtype={"producent": str, "dawka_ost": str, "czy_wspolistniejace" : int})
+        df = pd.read_csv(filePathR, delimiter=',', encoding='Windows-1250', dtype={"producent": str, "dawka_ost": str, "czy_wspolistniejace" : int})
         df[dateCol] = pd.to_datetime(df[dateCol])
         df = df.fillna(0)
         df.sort_values(by=[dateCol, ageCatCol, ageCol], inplace=True)
@@ -436,6 +452,9 @@ class PolishDeathData:
             while currDate <= analyzerDateRange[1]:
                 dateFilter = (df[dateCol] == currDate)
                 df_tmp = df[dateFilter].copy()
+                
+#                if currDate >= datetime.strptime("2022-02-07", '%Y-%m-%d') and currDate <= datetime.strptime("2022-02-08", '%Y-%m-%d'):
+#                    df_tmp.to_csv(dataType + str(currDate) + '.csv')
                 noVax = df_tmp.query(maskNoVax)[caseNoCol].sum() + df_tmp.query(maskHalfVax)[caseNoCol].sum()
                 vax = df_tmp.query(maskVax)[caseNoCol].sum() + df_tmp.query(maskBooster)[caseNoCol].sum()
                 if 'numer_zarazenia' == caseRepeatNoCol:
@@ -474,12 +493,12 @@ class PolishDeathData:
                 csvLines['Zakażeni 2 razy (sz.)'] = listTwoTimesVax
                 csvLines['Zakażeni 3 razy (sz.)'] = listThreeTimesVax
                 csvLines['Zakażeni 4 razy (sz.)'] = listFourTimesVax
-                csvLines['Zakażeni 1 raz (n.sz.)'] -= csvLines['Zakażeni 2 razy (n.sz.)']
-                csvLines['Zakażeni 2 razy (n.sz.)'] -= csvLines['Zakażeni 3 razy (n.sz.)']
-                csvLines['Zakażeni 3 razy (n.sz.)'] -= csvLines['Zakażeni 4 razy (n.sz.)']
-                csvLines['Zakażeni 1 raz (sz.)'] -= csvLines['Zakażeni 2 razy (sz.)']
-                csvLines['Zakażeni 2 razy (sz.)'] -= csvLines['Zakażeni 3 razy (sz.)']
-                csvLines['Zakażeni 3 razy (sz.)'] -= csvLines['Zakażeni 4 razy (sz.)']
+#                csvLines['Zakażeni 1 raz (n.sz.)'] -= csvLines['Zakażeni 2 razy (n.sz.)']
+#                csvLines['Zakażeni 2 razy (n.sz.)'] -= csvLines['Zakażeni 3 razy (n.sz.)']
+#                csvLines['Zakażeni 3 razy (n.sz.)'] -= csvLines['Zakażeni 4 razy (n.sz.)']
+#                csvLines['Zakażeni 1 raz (sz.)'] -= csvLines['Zakażeni 2 razy (sz.)']
+#                csvLines['Zakażeni 2 razy (sz.)'] -= csvLines['Zakażeni 3 razy (sz.)']
+#                csvLines['Zakażeni 3 razy (sz.)'] -= csvLines['Zakażeni 4 razy (sz.)']
                 csvLines['Zakażeni 1 raz (n.sz.)'] = csvLines['Zakażeni 1 raz (n.sz.)'].cumsum()
                 csvLines['Zakażeni 2 razy (n.sz.)'] = csvLines['Zakażeni 2 razy (n.sz.)'].cumsum()
                 csvLines['Zakażeni 3 razy (n.sz.)'] = csvLines['Zakażeni 3 razy (n.sz.)'].cumsum()
